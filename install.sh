@@ -271,7 +271,7 @@ else
 fi
 
 # Fetch version config to download the target release
-RELEASES_REPO="HwJhx/forenyx-releases"
+RELEASES_REPO="HwJhx/fnx-sw-release"
 
 # ---------------------------------------------------------------------------
 # 离线安装：跳过全部联网步骤（授权校验、版本查询、下载），改用本地离线包。
@@ -827,7 +827,7 @@ case "$1" in
             CURRENT_VERSION="unknown"
         fi
 
-        RELEASES_REPO="HwJhx/forenyx-releases"
+        RELEASES_REPO="HwJhx/fnx-sw-release"
         VERSION_URL="https://raw.githubusercontent.com/$RELEASES_REPO/main/version.json"
 
         echo -e "$APP_DISPLAY_NAME · $AGENT_NAME $CURRENT_VERSION"
@@ -868,7 +868,7 @@ case "$1" in
             exit 0
         fi
 
-        RELEASES_REPO="HwJhx/forenyx-releases"
+        RELEASES_REPO="HwJhx/fnx-sw-release"
         VERSION_URL="https://raw.githubusercontent.com/$RELEASES_REPO/main/version.json"
         
         VERSION_DATA=$(curl -fsSL --connect-timeout 5 "$VERSION_URL" || echo "")
