@@ -1,4 +1,4 @@
 {
-  "version": "v0.0.4",
-  "note": "### fnx_sw 0.0.4 \n- sw graph engineering 初版（用于测试）"
+  "version": "v0.0.5",
+  "note": "### fnx_sw 0.0.5 \n- 五个 TUI bug 的修复 + HAL 目录调整"
 }
