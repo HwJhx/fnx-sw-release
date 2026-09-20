@@ -1,4 +1,4 @@
 {
-  "version": "v0.0.3",
-  "note": "### fnx_sw 0.0.3 \n- 删除不适用的大部分UVM相关文件(保留一小部分，用于参考)"
+  "version": "v0.0.4",
+  "note": "### fnx_sw 0.0.4 \n- sw graph engineering 初版（用于测试）"
 }
