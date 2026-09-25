@@ -32,6 +32,14 @@ NC='\033[0m' # No Color
 # 那就是把整个 ~/.forenyx 连同授权文件一起删掉，且 shell 全程不报错。
 AGENT_NAME="fnx_sw"
 
+# AGENT_NAME 为空是致命的：路径会算成 "~/.forenyx/"，而下面有 rm -rf 作用在它上面 ——
+# 等于把整个 ~/.forenyx 连同机器级授权文件一起删掉，shell 全程不报错。上面那句注释
+# 只是约定，约定挡不住派生新智能体时改错这一行、或者有人把定义往下挪，所以这里再拦一道。
+if [ -z "$AGENT_NAME" ]; then
+    echo -e "${RED}❌ AGENT_NAME 为空，拒绝继续 —— 否则 rm -rf 会作用到整个 ~/.forenyx。${NC}"
+    exit 1
+fi
+
 FORENYX_ROOT="$HOME/.forenyx"
 AGENT_HOME="$FORENYX_ROOT/$AGENT_NAME"
 BIN_DIR="$AGENT_HOME/bin"

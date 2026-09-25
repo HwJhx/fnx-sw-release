@@ -212,6 +212,49 @@ abort() {
 }
 
 # ---------------------------------------------------------------------------
+# 产物身份校验：包/源码自带的 piConfig.agentName 必须等于本脚本的 AGENT_NAME。
+#
+# **三份安装脚本（install.sh / install-release.sh / install-release_test.sh）各有一份
+# 一模一样的副本** —— 它们都以 `curl … | bash` 单文件分发，没法 source 公共文件。
+# 改这个函数要改三处。
+#
+# 拦的是"装成了别的产品"：发布仓库写错、REPO_URL/remote 指向别的智能体、或者本产品
+# 某版本的 tar.gz 还没上传、自动路径退到了别的产品的下载地址（真实发生过）。
+# 调用点必须在动目标目录**之前**：发现不对时现有安装要一个字节都没被改。
+#
+# 解析优先 python3。退化的 sed+cut 那套是按引号数字段位置，package.json 一旦压成一行
+# 就会取到别的字段的值（实测取到了顶层 "name"），那会让这道闸对所有安装都误报。
+# ---------------------------------------------------------------------------
+verify_agent_identity() {
+    local pkg="$1"
+    local built=""
+    [ -f "$pkg" ] || return 0        # 没有 package.json（旧版产物）不拦，只是查不了
+    if command -v python3 >/dev/null 2>&1; then
+        built=$(python3 -c "
+import sys, json
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    raise SystemExit(0)
+print((d.get('piConfig') or {}).get('agentName', ''))
+" "$pkg" 2>/dev/null || echo "")
+    fi
+    if [ -z "$built" ]; then
+        built=$(grep -o '"agentName"[[:space:]]*:[[:space:]]*"[^"]*"' "$pkg" 2>/dev/null \
+            | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+    fi
+    [ -n "$built" ] || return 0
+    if [ "$built" != "$AGENT_NAME" ]; then
+        echo -e "${RED}❌ 智能体名不一致：本脚本装的是 '$AGENT_NAME'，"
+        echo -e "   而拿到的产物自带的是 '$built'。${NC}"
+        echo -e "${YELLOW}   多半是发布仓库/源码仓库指错了产品，或者本版本的安装包还没上传、"
+        echo -e "   退到了别的产品的下载地址。已中止，现有安装未被改动。${NC}"
+        rm -rf /tmp/forenyx
+        abort 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # 旧版布局拦截
 #
 # v0.4.1 及更早把单个智能体直接摊在 ~/.forenyx 下（bin/ libexec/ agent/）。
@@ -337,12 +380,15 @@ if [ "$OFFLINE_MODE" = "1" ]; then
     EXPIRE_DISPLAY=""
 
     echo -e "  - Extracting to $LIBEXEC_DIR..."
-    rm -rf "$LIBEXEC_DIR"/*
+    # 同在线分支：先解包验身份，确认是本产品的包再清 $LIBEXEC_DIR。
+    # 离线包是人工拷过来的，拷错产品的概率不比自动路径低。
     rm -rf /tmp/forenyx
     if ! tar -xzf "$TMP_TARBALL" -C /tmp/; then
         echo -e "${RED}Error: Failed to extract installation archive.${NC}"
         exit 1
     fi
+    verify_agent_identity /tmp/forenyx/package.json
+    rm -rf "$LIBEXEC_DIR"/*
     if ! cp -rf /tmp/forenyx/* "$LIBEXEC_DIR/"; then
         echo -e "${RED}Error: Failed to copy binaries to installation folder.${NC}"
         rm -rf /tmp/forenyx
@@ -616,15 +662,31 @@ if [ -n "$TARGET_TAG" ]; then
         echo -e "${YELLOW}   请确认该版本已发布对应平台的安装包。${NC}"
         if [ -n "$RELEASE_TAG" ]; then
             echo -e "${YELLOW}   可能是 --release 写错了版本号，或该版本没发这个平台的产物。${NC}"
-            abort 1
+        else
+            # **不退到服务端地址。** version.json 说了版本、附件却没上传，这是发布方的
+            # 中间状态（打完 tag 还没传 tar.gz 的那几分钟），不是客户端该自己找替代的
+            # 理由 —— 服务端给的地址可能属于另一个产品，真下下来就装成别的东西了。
+            # 这跟 --release 写错版本号是同一种错：要的那个包不存在，停下来说清楚。
+            echo -e "${YELLOW}   本版本的安装包尚未上传，请稍后重试；急的话用 --release 指定一个已发布的版本。${NC}"
         fi
-        echo -e "${YELLOW}   version.json 声明的版本尚未发布附件，改用服务端提供的地址。${NC}"
-        DOWNLOAD_URL="$SERVER_URL"
+        abort 1
     elif [ -n "$RELEASE_TAG" ]; then
         echo -e "  - ${YELLOW}注意：本次安装的是指定版本 $TARGET_TAG，不是云端最新版。${NC}"
         echo -e "    ${YELLOW}启动时仍会提示有新版本；执行 ${AGENT_NAME} update 会升回最新。${NC}"
     fi
 else
+    # version.json 拉不到（GitHub 不通、仓库改名……）才走这条。服务端给的地址是公开的
+    # GitHub 地址，但**它不一定属于本产品**：授权服务给五个智能体签发链接，返回的可能是
+    # 另一个仓库的 release。本地有 RELEASES_REPO 常量，核一下再用。
+    case "$SERVER_URL" in
+        "https://github.com/$RELEASES_REPO/"*) ;;
+        https://github.com/*)
+            echo -e "${RED}❌ 取不到版本信息，而服务端给的下载地址不属于本产品的发布仓库：${NC}"
+            echo -e "   $SERVER_URL"
+            echo -e "${YELLOW}   本产品的发布仓库是 $RELEASES_REPO。已中止，现有安装未被改动。${NC}"
+            abort 1
+            ;;
+    esac
     echo -e "${YELLOW}⚠ 取不到版本信息，改用服务端提供的下载地址。${NC}"
     DOWNLOAD_URL="$SERVER_URL"
 fi
@@ -649,16 +711,21 @@ if ! curl -f -L --progress-bar "$DOWNLOAD_URL" -o "$TMP_TARBALL"; then
 fi
 
 echo -e "  - Extracting to $LIBEXEC_DIR..."
-# Clean old installation binaries first
-rm -rf "$LIBEXEC_DIR"/*
-
 # Extract tarball.
 # The tarball contains a folder named "forenyx", inside which has all the files.
+#
+# **先解到 /tmp 并验身份，再清 $LIBEXEC_DIR。** 顺序反过来的话，下到一个别的产品的
+# 包（或者半截文件）就已经把现有安装删干净了，而校验只能在那之后报错、无从回滚。
+rm -rf /tmp/forenyx
 if ! tar -xzf "$TMP_TARBALL" -C /tmp/; then
     echo -e "${RED}Error: Failed to extract installation archive.${NC}"
     rm -f "$TMP_TARBALL"
     exit 1
 fi
+verify_agent_identity /tmp/forenyx/package.json
+
+# Clean old installation binaries only after the archive checked out
+rm -rf "$LIBEXEC_DIR"/*
 
 # Move contents to $LIBEXEC_DIR/
 if ! cp -rf /tmp/forenyx/* "$LIBEXEC_DIR/"; then
@@ -760,16 +827,10 @@ else
     rm -f "$GLOBAL_ENV_FILE.bak"
 fi
 
-# 校验：安装脚本写的 AGENT_NAME 与二进制自带的 piConfig.agentName 必须一致。
-# 不一致的话，目录和命令叫 A、横幅和 --version 叫 B，排查时会非常费解。
-BUILT_AGENT=$(sed -n '/"piConfig"[[:space:]]*:/,/}/p' "$LIBEXEC_DIR/package.json" 2>/dev/null \
-    | grep '"agentName"[[:space:]]*:' | head -1 | cut -d'"' -f4)
-if [ -n "$BUILT_AGENT" ] && [ "$BUILT_AGENT" != "$AGENT_NAME" ]; then
-    echo -e "${RED}❌ 智能体名不一致：安装脚本写的是 '$AGENT_NAME'，"
-    echo -e "   而下载到的二进制自带的是 '$BUILT_AGENT'。${NC}"
-    echo -e "${YELLOW}   多半是装错了发布仓库，或两个仓库的版本没对齐。已中止，未改动 PATH。${NC}"
-    abort 1
-fi
+# 再查一次装到位的产物。解包时已经查过同一件事（verify_agent_identity），这里查的是
+# "cp 之后 libexec 里真正躺着的东西"——cp 拷了一半、或者 libexec 里混进了上一次安装的
+# 残留，都只有这一刻看得见。成本是读一个文件。
+verify_agent_identity "$LIBEXEC_DIR/package.json"
 
 # 4. Generate Forenyx CLI Shell Wrapper
 echo -e "${BLUE}[4/5] Creating command wrapper...${NC}"
