@@ -30,7 +30,7 @@ source ~/.tcshrc       # Tcsh
 fnx_sw
 ```
 
-安装后的目录：
+安装后的目录（默认 `~/.forenyx`，用 `--prefix` 指定时为指定的目录，见下文）：
 
 ```
 ~/.forenyx/                  机器级，与本机其它 Forenyx 智能体共用
@@ -44,6 +44,24 @@ fnx_sw
 
 > 同一台机器可以并存多个 Forenyx 智能体（`fnx_dv`、`fnx_sw` …），各占一个子目录，
 > 互不干扰，共用同一张授权。卸载其中一个不会影响其余。
+
+### 安装到指定目录
+
+默认装在 `~/.forenyx`。home 空间不够、或者规定软件不能装在 home 下时，安装时加 `--prefix <目录>`：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HwJhx/fnx-sw-release/main/install.sh | bash -s -- --prefix /data/zhang/forenyx
+```
+
+程序、授权文件、配置都放在这个目录里，下文称「安装目录」。
+
+> [!NOTE]
+> * **每个账号只有一个安装目录**：fnx_dv、fnx_sw 共用其中的授权。装第二个智能体时不写 `--prefix` 也会自动装进同一个目录；写成别的目录会被拒绝
+> * **目录要求**：指定的目录要么还不存在（安装器会创建），要么是属于你的空目录；新建时它的上一级目录必须你能写入。`/data` 这类只有 root 能写的位置，请管理员先建好属于你的目录（如 `/data/zhang`）
+> * **路径字符**：只能用字母、数字和 `/ . _ - + @ % , = ~`，不能有空格、引号、`$`、`*`、`;` 等特殊字符
+> * **升级、卸载**：自动沿用原来的位置，不用再写 `--prefix`
+> * **批处理环境**：LSF/bsub、cron 等不加载 shell 配置文件的环境里，要用完整路径 `<安装目录>/fnx_sw/bin/fnx_sw` 启动
+> * **换位置**：已经装在 `~/.forenyx`、想搬到别处时不用重新授权：退出所有智能体，`mv ~/.forenyx /data/zhang/forenyx`（新位置必须还不存在），再把本账号装的每个智能体都用上面带 `--prefix` 的命令各装一次
 
 ### 安装指定版本
 
@@ -87,7 +105,7 @@ bash install.sh --release v0.0.1
 
 ### 3. 配置 `ic-docx2md` 的视觉模型（可选）
 
-需要把 Word / PDF 文档转成 Markdown 时才用得上。编辑安装时自动生成的全局配置：
+需要把 Word / PDF 文档转成 Markdown 时才用得上。编辑安装时自动生成的全局配置（安装目录下的 `.env`；用 `--prefix` 装到别处的，把 `~/.forenyx` 换成你的安装目录）：
 
 ```bash
 vi ~/.forenyx/.env
@@ -105,8 +123,8 @@ TEMPERATURE=0.1
 
 > [!IMPORTANT]
 > **这与第 1 步的 `/login` 是两套配置，别混。**
-> * `/login` 配的是**对话模型**，写在 `~/.forenyx/fnx_sw/agent/auth.json`，每个智能体各自一份
-> * 这里配的只管**文档转换里的图片识别**，写在 `~/.forenyx/.env`，本机所有智能体共用
+> * `/login` 配的是**对话模型**，写在安装目录下的 `fnx_sw/agent/auth.json`，每个智能体各自一份
+> * 这里配的只管**文档转换里的图片识别**，写在安装目录下的 `.env`，本账号所有智能体共用
 >
 > 同一个文件里的 `FORENYX_LICENSE_KEY` 与 `FORENYX_CLIENT_ID` 属于授权，**请勿手工修改**
 > —— `CLIENT_ID` 在首次安装时与服务端完成绑定，改了会导致校验失败。
@@ -150,7 +168,7 @@ fnx_sw uninstall
 
 **启动时提示「无法连接授权服务器，已改用本地授权文件校验」**
 
-说明这次没连上授权服务器，改用本机 `~/.forenyx/forenyx.lic` 完成了校验 —— 程序能正常
+说明这次没连上授权服务器，改用安装目录下的 `forenyx.lic` 完成了校验 —— 程序能正常
 启动就说明授权是有效的。若长期连不上，`.lic` 到期后会无法启动，建议排查网络：需要经代理
 出网的环境，要在启动前导出 `HTTPS_PROXY` / `HTTP_PROXY` 环境变量（写在 CLI 设置里对授权
 校验不生效）。
