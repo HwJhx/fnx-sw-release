@@ -1,87 +1,51 @@
 # fnx_sw AI CLI
 
-> **TODO：一句话说明 fnx_sw 面向谁、解决什么问题。**
+> **芯片嵌入式软件生成智能体：从芯片架构描述与各 IP 的寄存器描述、规格书出发，生成寄存器头文件、裸机驱动、HAL 与 BSP，交叉编译后在模拟器上验证。**
 > 免源码、零依赖，支持快速部署。
 
 > [!IMPORTANT]
-> **当前状态**：`v0.0.1`，首个版本。内置技能集合仍在按 fnx_sw 的职责调整中。
+> **当前版本**：`v0.0.12`。
 
 > [!NOTE]
 > **系统兼容性**：目前仅发布 **Linux x64** 版本。其他平台的安装包如有需要可另行构建。
 
 ---
 
-## 快速安装与启动
+## 安装
 
-在 Linux 终端中运行一键部署脚本：
+> [!IMPORTANT]
+> **已不支持在线安装。** 原来的 `curl … install.sh | bash` 现在只会提示「已不支持在线安装，请向管理员索取离线安装包」。
+> 请向管理员索取离线安装包，解开后按包内 `README.txt` 操作。
+
+有两种装法，都在离线包目录里执行：
 
 ```bash
-# 1. 运行安装脚本（将提示输入商业授权激活码 License Key，完成一码一机绑定）
-curl -fsSL https://raw.githubusercontent.com/HwJhx/fnx-sw-release/main/install.sh | bash
+# A. 装到指定目录，所有用户共用（管理员先建好 /tools/forenyx，由 root 或某个账号执行一次）
+./install-release.sh --prefix /tools/forenyx
 
-# 2. 刷新当前终端的环境变量（按你使用的 Shell 选择）
-source ~/.bashrc       # Bash
-source ~/.zshrc        # Zsh
-source ~/.cshrc        # Csh
-source ~/.tcshrc       # Tcsh
-# 或直接重新打开一个终端
-
-# 3. 启动
-fnx_sw
+# B. 只给自己用，装到 ~/.forenyx
+./install-release.sh
 ```
 
-安装后的目录（默认 `~/.forenyx`，用 `--prefix` 指定时为指定的目录，见下文）：
+装到指定目录后：
 
 ```
-~/.forenyx/                  机器级，与本机其它 Forenyx 智能体共用
-├── forenyx.lic              授权文件
-├── .env                     授权码 / client_id / 文档转换的视觉模型配置
+/tools/forenyx/.forenyx/        所有用户共用，只放程序
+├── forenyx-hostid.sh           申请授权时运行它
 └── fnx_sw/
-    ├── bin/fnx_sw           命令入口，PATH 指向这里
-    ├── libexec/             程序本体
-    └── agent/               设置、会话历史、自定义技能
+    ├── bin/fnx_sw              命令入口
+    ├── libexec/                程序本体、加密的内置技能
+    └── tools/                  fd、rg
+
+~/.forenyx/                     每个用户自己的，首次运行 fnx_sw 时自动建好
+├── .env                        设备标识、视觉模型配置、VENV_PYTHON
+├── forenyx.lic                 授权文件（license import 导入后才有）
+└── fnx_sw/agent/               设置、会话历史、自定义技能
 ```
 
-> 同一台机器可以并存多个 Forenyx 智能体（`fnx_dv`、`fnx_sw` …），各占一个子目录，
-> 互不干扰，共用同一张授权。卸载其中一个不会影响其余。
-
-### 安装到指定目录
-
-默认装在 `~/.forenyx`。home 空间不够、或者规定软件不能装在 home 下时，安装时加 `--prefix <目录>`：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/HwJhx/fnx-sw-release/main/install.sh | bash -s -- --prefix /data/zhang/forenyx
-```
-
-程序、授权文件、配置都放在这个目录里，下文称「安装目录」。
-
-> [!NOTE]
-> * **每个账号只有一个安装目录**：fnx_dv、fnx_sw 共用其中的授权。装第二个智能体时不写 `--prefix` 也会自动装进同一个目录；写成别的目录会被拒绝
-> * **目录要求**：指定的目录要么还不存在（安装器会创建），要么是属于你的空目录；新建时它的上一级目录必须你能写入。`/data` 这类只有 root 能写的位置，请管理员先建好属于你的目录（如 `/data/zhang`）
-> * **路径字符**：只能用字母、数字和 `/ . _ - + @ % , = ~`，不能有空格、引号、`$`、`*`、`;` 等特殊字符
-> * **升级、卸载**：自动沿用原来的位置，不用再写 `--prefix`
-> * **批处理环境**：LSF/bsub、cron 等不加载 shell 配置文件的环境里，要用完整路径 `<安装目录>/fnx_sw/bin/fnx_sw` 启动
-> * **换位置**：已经装在 `~/.forenyx`、想搬到别处时不用重新授权：退出所有智能体，`mv ~/.forenyx /data/zhang/forenyx`（新位置必须还不存在），再把本账号装的每个智能体都用上面带 `--prefix` 的命令各装一次
-
-### 安装指定版本
-
-版本号须带 `v` 前缀，形如 `v0.0.1`：
-
-```bash
-# 方式一：管道直接指定
-curl -fsSL https://raw.githubusercontent.com/HwJhx/fnx-sw-release/main/install.sh | bash -s -- --release v0.0.1
-
-# 方式二：下载脚本后执行
-curl -fsSLO https://raw.githubusercontent.com/HwJhx/fnx-sw-release/main/install.sh
-bash install.sh --release v0.0.1
-```
-
-> [!TIP]
-> * **免交互授权**：用 `--license` 一并传入授权码，例如
->   `bash install.sh --release v0.0.1 --license FNX-XXXX-XXXX-XXXX`
-> * **覆盖 / 回退**：本机已激活过的话，再次执行会自动沿用已绑定的 License 并安全覆盖程序
-> * **可用版本**：见 [Releases](https://github.com/HwJhx/fnx-sw-release/releases)
-> * `--release` 仅适用于在线安装，不能与 `--offline` 同时使用
+* root 安装时会写入 `/etc/profile.d/forenyx.sh` 与 `forenyx.csh`，用户重新登录后直接输入 `fnx_sw`；普通账号安装时只改自己的 shell 配置文件，并打印这两个文件的内容供 root 放入。
+* 每个用户首次运行 `fnx_sw` 时按提示申请授权：运行 `/tools/forenyx/.forenyx/forenyx-hostid.sh`，把输出发给管理员换取授权文件，再执行 `fnx_sw license import <授权文件>`。
+* 配置目录可以用环境变量 `FORENYX_CODING_AGENT_DIR` 另行指定（例如每个 tmux 窗口一份配置），授权仍用 `~/.forenyx` 里的。
 
 ---
 
@@ -103,53 +67,13 @@ bash install.sh --release v0.0.1
 输入 `/settings` 打开高级设置，把 **`Hide thinking`** 改为 `true` —— 隐藏模型的思考过程，
 响应更快、日常交互的 Token 消耗更低。
 
-### 3. 配置 `ic-docx2md` 的视觉模型（可选）
-
-需要把 Word / PDF 文档转成 Markdown 时才用得上。编辑安装时自动生成的全局配置（安装目录下的 `.env`；用 `--prefix` 装到别处的，把 `~/.forenyx` 换成你的安装目录）：
-
-```bash
-vi ~/.forenyx/.env
-```
-
-填入 `OPENAI_API_KEY`，其余按需调整：
-
-```ini
-OPENAI_API_KEY=
-OPENAI_API_BASE="https://api.siliconflow.cn"
-ARK_MODEL_NAME='Qwen/Qwen3.8-27B'
-MAX_OUTPUT_TOKENS=32768
-TEMPERATURE=0.1
-```
-
-> [!IMPORTANT]
-> **这与第 1 步的 `/login` 是两套配置，别混。**
-> * `/login` 配的是**对话模型**，写在安装目录下的 `fnx_sw/agent/auth.json`，每个智能体各自一份
-> * 这里配的只管**文档转换里的图片识别**，写在安装目录下的 `.env`，本账号所有智能体共用
->
-> 同一个文件里的 `FORENYX_LICENSE_KEY` 与 `FORENYX_CLIENT_ID` 属于授权，**请勿手工修改**
-> —— `CLIENT_ID` 在首次安装时与服务端完成绑定，改了会导致校验失败。
-
 ---
 
 ## 运维命令
 
 ### 升级
 
-```bash
-fnx_sw update
-```
-
-自动读取本机已绑定的 License 完成静默校验并覆盖升级，不必重跑安装脚本。
-
-### 回退到指定版本
-
-不用先卸载，直接带 `--release` 重跑安装命令即可安全覆盖：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/HwJhx/fnx-sw-release/main/install.sh | bash -s -- --release v0.0.1
-```
-
-会沿用本机已绑定的 License 及配置，仅切换程序版本。
+不支持 `fnx_sw update`（执行时只会说明升级方法）。向管理员索取新版离线包，按原来的装法重新执行安装命令；装到指定目录的写同一个 `--prefix`，由安装账号执行，升级前请通知用户退出。各用户 `~/.forenyx` 里的授权与配置都会保留。
 
 ### 卸载
 
@@ -157,10 +81,12 @@ curl -fsSL https://raw.githubusercontent.com/HwJhx/fnx-sw-release/main/install.s
 fnx_sw uninstall
 ```
 
-只移除 `fnx_sw` 自己的目录与 PATH 配置，可以选择是否保留自定义技能和历史会话。
+* 装到指定目录时，只有安装账号（或 root）能卸载，其他用户执行会提示「你没有删除权限，请联系安装账号」。卸载不动任何用户自己的 `~/.forenyx`。
+* 以前在线安装的机器，也可以用本仓库的卸载脚本：
 
-> 本机还装有其它 Forenyx 智能体时，**共用的授权文件会自动保留**；只有在一个智能体都不剩
-> 时，才会询问是否一并清除授权。
+```bash
+curl -fsSL https://raw.githubusercontent.com/HwJhx/fnx-sw-release/main/uninstall.sh | bash
+```
 
 ---
 
@@ -182,7 +108,7 @@ fnx_sw uninstall
 
 ```
 $ fnx_sw --version
-ForeNyx CLI · fnx_sw v0.0.1
+ForeNyx CLI · fnx_sw v0.0.12
 ```
 
 左边是产品名，右边是当前智能体 —— 同时开多个智能体时用它区分自己在哪一个里面。
@@ -191,7 +117,75 @@ ForeNyx CLI · fnx_sw v0.0.1
 
 ## 技能（Skills）
 
-> **TODO：待 fnx_sw 的技能集合确定后补充。**
-> 当前版本携带的是上游智能体的技能集合，尚未按 fnx_sw 的职责调整。
+fnx_sw 带一个生成流程命令 `/sw-graph`（内置命令，直接输入，不要写成 `/skill:sw-graph`）和 6 个技能：5 个由流程在需要时自动调用，也可以单独调用重做某一步；`sw-hal-doc` 单独使用。工作目录与输入由平台变量给出（见下一节），命令里不写路径。
 
-在 CLI 内输入 `/` 可以查看当前可用的技能列表。
+| 命令 / 技能 | 用途 | 怎么用 |
+| --- | --- | --- |
+| **`/sw-graph`**（内置命令） | 整条生成流水线：清点输入、生成、编译、仿真、汇总 | `/sw-graph [--only …] [--restart] [--status]` |
+| **`sw-driver-gen`** | 为一个驱动库写 LL 驱动 | 流程自动调用；单独重做：`/skill:sw-driver-gen <驱动库>` |
+| **`sw-hal-gen`** | 为一个有 spec 的驱动库写 HAL | 流程自动调用；单独重做：`/skill:sw-hal-gen <驱动库>` |
+| **`sw-bsp-gen`** | 为脚本模板没覆盖的 CPU 核写 BSP | 流程自动调用；`/skill:sw-bsp-gen` |
+| **`sw-fix-compile`** | 修交叉编译错误 | 流程自动调用；`/skill:sw-fix-compile` |
+| **`sw-diagnose-sim`** | 诊断仿真失败 | 流程自动调用；`/skill:sw-diagnose-sim` |
+| **`sw-hal-doc`** | 根据 IP 规格书与寄存器描述生成 HAL 说明文档 | `/skill:sw-hal-doc <驱动库>` |
+
+`<驱动库>` 是驱动库 id，与生成的 `lib/<id>/`、`hal/<id>/` 同名，如 `uart`。`/sw-graph` 的参数：`--only a,b` 只处理列出的驱动库；`--restart` 把上次的状态整体备份后从头开始；`--status` 只看进度。再次执行 `/sw-graph` 只处理变了的部分，人改过的代码不覆盖。
+
+---
+
+## 平台环境变量
+
+* **一颗芯片一个工作目录**：平台先建好 `FNX_SW_DIR`，再在它下面启动 fnx_sw。生成的代码与运行状态都在这里。
+* 值都是绝对路径；每个命令 / 技能开始时检查用到的变量，缺失或不合法就列出全部问题后停止。
+* 只在启动时读取；工具变量或 `toolchain.json` 改了，重新启动 fnx_sw 并用 `/sw-graph --restart`。同一个工作目录同时只能跑一个 `/sw-graph`。
+* 工具只认这些变量，不在 `PATH` 里找；模拟器都不设时只生成、编译，报告写明未仿真。
+
+| 变量 | 必需/选用 | 作用 | 格式要求 |
+|---|---|---|---|
+| `FNX_SW_DIR` | 必需 | 芯片级固件工程目录；fnx_sw 在这里启动，生成的代码与运行状态都在这里 | 必须已存在且可写；等于 fnx_sw 的启动目录 |
+| `FNX_SOC_ARCH_FILE` | 必需 | 芯片架构描述 `soc_arch.json`（平台 SpecAgent 产出）：CPU、内存区、设备基址、中断、各 IP 的 ip.xml 位置 | 可读文件；`schema` 为 `forenyx.soc_arch/*`；设备的 `ipxact` 须为绝对路径，同一驱动库的设备 `ipxact` 须相同 |
+| `FNX_CC` | 必需 | 交叉编译器 gcc 的绝对路径，如 `/opt/riscv/bin/riscv64-unknown-elf-gcc` | 可执行文件，文件名以 `gcc` 结尾（交叉前缀从文件名取） |
+| `FNX_OBJCOPY` | 选用 | objcopy 的绝对路径 | 不设时取 `FNX_CC` 同目录、同前缀的 `objcopy`，它须存在且可执行 |
+| `FNX_SIZE` | 选用 | size 的绝对路径 | 同上，`size` |
+| `FNX_SPIKE` | 选用 | 模拟器 spike 的绝对路径（RISC-V；寄存器写检查只用 spike） | 设置了须为可执行文件 |
+| `FNX_QEMU` | 选用 | 模拟器 qemu 的绝对路径（`qemu-system-riscv32` / `-riscv64` / `-arm`，与芯片对应的那一个） | 设置了须为可执行文件 |
+
+模拟器都不设时：只生成代码、编译，不仿真、不做寄存器写检查，报告结论最高为 PARTIAL 并写明「未仿真」。
+
+工具只认这些变量，不在 `PATH` 或常见安装目录里找。
+
+设置脚本（模板）：
+
+```csh
+#!/bin/csh -f
+# fnx_sw 平台环境变量（一颗芯片一份）。用法：cd $FNX_SW_DIR && source fnx_sw_env_chipA.csh && fnx_sw
+# 路径为示例。选用的变量没有就整行删掉。
+
+# 芯片级工作目录（必需）：平台先建好，再在这里启动 fnx_sw
+setenv FNX_SW_DIR        /proj/chipA/software
+# 芯片架构描述（必需）：各设备的 ipxact 写 ip.xml 的绝对路径
+setenv FNX_SOC_ARCH_FILE /proj/chipA/spec/soc_arch.json
+# 交叉编译器（必需）：文件名以 gcc 结尾，objcopy/size 默认取同目录同前缀的
+setenv FNX_CC            /opt/riscv/bin/riscv64-unknown-elf-gcc
+# 选用：objcopy / size 不在 FNX_CC 旁边时才设
+#setenv FNX_OBJCOPY      /opt/riscv/bin/riscv64-unknown-elf-objcopy
+#setenv FNX_SIZE         /opt/riscv/bin/riscv64-unknown-elf-size
+# 选用：模拟器；都不设就只编译不仿真
+setenv FNX_SPIKE         /opt/spike/bin/spike
+#setenv FNX_QEMU         /opt/qemu/bin/qemu-system-riscv32
+```
+
+### 各 IP 的输入放在哪（不设变量）
+
+soc_arch 里每个设备的 `ipxact` 字段写该 IP 的 ip.xml 绝对路径。其余输入放在 ip.xml 旁边：
+
+| 输入 | 位置（以 `ipxact` = `/proj/ips/uart/docs/ip.xml` 为例） | 缺了会怎样 |
+|---|---|---|
+| ip.xml | `ipxact` 指向的文件 | 退回旁边 `component.json` 的寄存器表；两者都没有就在「某个 IP 缺输入」确认点让人决定（补文件 / 占位 / 跳过） |
+| component.json | 同目录：`/proj/ips/uart/docs/component.json`（实例基址、IRQ、时钟门控位号，另一份寄存器表） | 少一份交叉核对来源；时钟门控位号没有来源 |
+| spec | 同目录：`/proj/ips/uart/docs/spec.md` | 不生成 HAL；`sw-hal-doc` 无法生成 |
+| 行为模型 | ip.xml 上两级目录的 `model/*.py`：`/proj/ips/uart/model/` | 不阻塞 |
+
+设备没写 `ipxact` 就当作该 IP 没有输入。还没完成验证的 IP 可以暂时没有 ip.xml。平台应让同一 IP 的 `ipxact` 与 fnx_dv 的 `FNX_REG_XML` 指向同一份文件。
+
+时钟门控：寄存器偏移取自 soc_arch 中 rcc 设备的 ip.xml，各外设的位号取自各 IP 的 `component.json`；不要求在 soc_arch 里写位号。
