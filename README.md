@@ -143,7 +143,7 @@ fnx_sw 带一个生成流程命令 `/sw-graph`（内置命令，直接输入，�
 | 变量 | 必需/选用 | 作用 | 格式要求 |
 |---|---|---|---|
 | `FNX_SW_DIR` | 必需 | 芯片级固件工程目录；fnx_sw 在这里启动，生成的代码与运行状态都在这里 | 必须已存在且可写；等于 fnx_sw 的启动目录 |
-| `FNX_SOC_ARCH_FILE` | 必需 | 芯片架构描述 `soc_arch.json`（平台 SpecAgent 产出）：CPU、内存区、设备基址、中断、各 IP 的 ip.xml 位置 | 可读文件；`schema` 为 `forenyx.soc_arch/*`；设备的 `ipxact` 须为绝对路径，同一驱动库的设备 `ipxact` 须相同 |
+| `FNX_SOC_ARCH_FILE` | 必需 | 芯片架构描述 `soc_arch.json`（平台 SpecAgent 产出）：CPU、内存区、设备基址、中断、各 IP 的输入位置 | 可读文件；`schema` 为 `forenyx.soc_arch/*`；设备的 `ipxact`、`component_json`、`spec` 须为绝对路径，同一驱动库的设备这三个字段须相同 |
 | `FNX_CC` | 必需 | 交叉编译器 gcc 的绝对路径，如 `/opt/riscv/bin/riscv64-unknown-elf-gcc` | 可执行文件，文件名以 `gcc` 结尾（交叉前缀从文件名取） |
 | `FNX_OBJCOPY` | 选用 | objcopy 的绝对路径 | 不设时取 `FNX_CC` 同目录、同前缀的 `objcopy`，它须存在且可执行 |
 | `FNX_SIZE` | 选用 | size 的绝对路径 | 同上，`size` |
@@ -177,15 +177,15 @@ setenv FNX_SPIKE         /opt/spike/bin/spike
 
 ### 各 IP 的输入放在哪（不设变量）
 
-soc_arch 里每个设备的 `ipxact` 字段写该 IP 的 ip.xml 绝对路径。其余输入放在 ip.xml 旁边：
+soc_arch 里每个设备用下面三个字段给出该 IP 的输入，都写绝对路径：`ipxact`（ip.xml）、`component_json`、`spec`。`component_json`、`spec` 没写时，到 ip.xml 所在目录找固定文件名（`component.json`、`spec.md`）。平台有 ip.xml 时应写 `ipxact`；没有 ip.xml 的 IP 也可以只写 `component_json`（寄存器取自它）和 `spec`，但拿不到行为模型（它按 ip.xml 的位置找）：
 
 | 输入 | 位置（以 `ipxact` = `/proj/ips/uart/docs/ip.xml` 为例） | 缺了会怎样 |
 |---|---|---|
-| ip.xml | `ipxact` 指向的文件 | 退回旁边 `component.json` 的寄存器表；两者都没有就在「某个 IP 缺输入」确认点让人决定（补文件 / 占位 / 跳过） |
-| component.json | 同目录：`/proj/ips/uart/docs/component.json`（实例基址、IRQ、时钟门控位号，另一份寄存器表） | 少一份交叉核对来源；时钟门控位号没有来源 |
-| spec | 同目录：`/proj/ips/uart/docs/spec.md` | 不生成 HAL；`sw-hal-doc` 无法生成 |
+| ip.xml | `ipxact` 指向的文件 | 退回 `component.json` 的寄存器表；两者都没有就在「某个 IP 缺输入」确认点让人决定（补文件 / 占位 / 跳过） |
+| component.json | 设备的 `component_json` 字段；没写就是同目录的 `/proj/ips/uart/docs/component.json`（实例基址、IRQ、时钟门控位号，另一份寄存器表） | 少一份交叉核对来源；时钟门控位号没有来源 |
+| spec | 设备的 `spec` 字段；没写就是同目录的 `/proj/ips/uart/docs/spec.md` | 不生成 HAL；`sw-hal-doc` 无法生成 |
 | 行为模型 | ip.xml 上两级目录的 `model/*.py`：`/proj/ips/uart/model/` | 不阻塞 |
 
-设备没写 `ipxact` 就当作该 IP 没有输入。还没完成验证的 IP 可以暂时没有 ip.xml。平台应让同一 IP 的 `ipxact` 与 fnx_dv 的 `FNX_REG_XML` 指向同一份文件。
+三个字段都没写就当作该 IP 没有输入。同一驱动库的多个设备（如 tim0、tim1）这三个字段须一致，包括写不写（一个写了、一个没写也算不一致）。只改这些字段指向的路径，也和文件内容变了一样，算该 IP 的输入变了。还没完成验证的 IP 可以暂时没有 ip.xml。平台应让同一 IP 的 `ipxact` 与 fnx_dv 的 `FNX_REG_XML` 指向同一份文件。
 
 时钟门控：寄存器偏移取自 soc_arch 中 rcc 设备的 ip.xml，各外设的位号取自各 IP 的 `component.json`；不要求在 soc_arch 里写位号。
